@@ -56,7 +56,7 @@ def model(i):
     # Using library functions as much as possible to reduce overhead and improve performance
     # This function uses a "blessed index" approach to perform the calculations while excluding
     # a single index of the ndarray.
-    return np.sum(substitute_position_values((x[i], y[i], alpha[i]), position[:i])) + \
+    return np.sum(substitute_position_values(position[i], position[:i])) + \
            np.sum(substitute_position_values(position[i], position[i + 1:]))
 
 # Initial positions of both particles
@@ -80,10 +80,3 @@ time = np.linspace(0, 200, N)
 data = solve_ivp(model, (0, 200), position, t_eval=time)
 
 # plt.plot(time, data.x)
-
-[
-    [t0, (x0, y0, alpha0)]
-    [t1, y1]
-    [t2, y2]
-    [t3, y3]
-]
