@@ -13,5 +13,7 @@ def r(x_1, y_1, x_2, y_2):
 
 num_dipoles = 2 # Change as needed
 
+# Load this data however required.
 position = np.ndarray([num_dipoles, 3], dtype=np.float64)
 """`position` stores the (x, y, alpha) values of each protein in a 2D array."""
+

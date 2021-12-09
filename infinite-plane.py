@@ -24,40 +24,28 @@ v_y = (leading_constant / r(x, y, x_0, y_0)) * subexp_4 * subexp_2
 
 curl = sympy.diff(v_y, x) - sympy.diff(v_x, y)
 
-def substitute_position_values(coords_i, coords_j):
-    """Substitutes the position coordinates (x, y, alpha) of particles i and j into the
-       expressions for v_x, v_y, and alpha.
+# Defining helpher functions to substitute numerical values into the SymPy formulas
+vars = (x, y, x_0, y_0, alpha, alpha_0)
+sub_v_x = sympy.lambdify(vars, v_x, modules="numpy")
+sub_v_y = sympy.lambdify(vars, v_y, modules="numpy")
+sub_alpha = sympy.lambdify(vars, 0.5 * curl, modules="numpy")
+
+def substitute_position_values(x, y, alpha, x_0, y_0, alpha_0):
+    """Substitutes the position coordinates (x, y, alpha) of one particle and (x_0, y_0, alpha_0)
+       of another particle into the expressions for v_x, v_y, and alpha.
        
-       This is used in the modelling function `model` to calculate the total forces and
-       torques on the object."""
-    sub_v_x = sympy.N(v_x, \
-                {x: coords_j[0], y: coords_j[1], alpha: coords_j[2], \
-                x_0: coords_i[0], y_0: coords_i[1], alpha_0: coords_i[2]})
-    sub_v_y = sympy.N(v_y, \
-                {x: coords_j[0], y: coords_j[1], alpha: coords_j[2], \
-                x_0: coords_i[0], y_0: coords_i[1], alpha_0: coords_i[2]})
-    sub_alpha = 0.5 * sympy.N(curl, \
-                {x: coords_j[0], y: coords_j[1], alpha: coords_j[2], \
-                x_0: coords_i[0], y_0: coords_i[1], alpha_0: coords_i[2]})
-    return (sub_v_x, sub_v_y, sub_alpha)
+       This is used in the modelling function to calculate the total forces and torques on
+       the object."""
+    return (sub_v_x(x, y, alpha, x_0, y_0, alpha_0), sub_v_y(x, y, alpha, x_0, y_0, alpha_0), \
+            sub_alpha(x, y, alpha, x_0, y_0, alpha_0))
 
+# def model(i):
+#     # Using library functions as much as possible to reduce overhead and improve performance
+#     # This function uses a "blessed index" approach to perform the calculations while excluding
+#     # a single index of the ndarray.
+#     return np.sum(substitute_position_values(position[i], position[:i])) + \
+#            np.sum(substitute_position_values(position[i], position[i + 1:]))
 
-# def total_y_sum(i):
-#     """Finds the total force in the y-direction for the i'th particle."""
-#     # temp = np.sum(position[:i], axis=0) + np.sum(position[i + 1:], axis=0)
-#     # temp[2] /= 2
-#     # return temp
-#     total = 0
-#     for j in range(num_dipoles):
-#         if i != j:
-#             total += 
-
-def model(i):
-    # Using library functions as much as possible to reduce overhead and improve performance
-    # This function uses a "blessed index" approach to perform the calculations while excluding
-    # a single index of the ndarray.
-    return np.sum(substitute_position_values(position[i], position[:i])) + \
-           np.sum(substitute_position_values(position[i], position[i + 1:]))
 
 # Initial positions of both particles
 # Particle 1
@@ -78,5 +66,3 @@ position[1][2] = alpha_2
 time = np.linspace(0, 200, N)
 
 data = solve_ivp(model, (0, 200), position, t_eval=time)
-
-# plt.plot(time, data.x)
