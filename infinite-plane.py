@@ -1,68 +1,142 @@
-from common import *
-from scipy.integrate import solve_ivp
+from vec2 import *
+from particle import *
 
-x, y, x_0, y_0, alpha, alpha_0 = sympy.symbols("x y x_0 y_0 alpha alpha_0")
-"""
-x       = x-coordinate of a dipole
-y       = y-coordinate of a dipole
-alpha   = angle of that dipole w.r.t. the positive x-axis
-x_0     = x-coordinate of the dipole w.r.t. we are doing our calculations
-y_0     = y-coordinate of the dipole w.r.t. we are doing our calculations
-alpha_0 = angle (w.r.t. the positive x-axis) of the dipole w.r.t. we are doing our calculations
-"""
+# Input here the initial conditions of the particles
+################################################################################################################################
+num_particles = 2
 
-leading_constant = -kappa / (4 * sympy.pi * eta_2D)
-subexp_1 = (x - x_0) / r(x, y, x_0, y_0)
-subexp_2 = (y - y_0) / r(x, y, x_0, y_0)
+# Particle list
+particle_list = []
 
-subexp_3 = ( subexp_1 * sympy.cos(alpha_0) ) + ( subexp_2 * sympy.sin(alpha_0) )
+# Create the particles
+particle_list.append(Particle(initial_position=Vec2(0, 0), initial_angle=0))
+particle_list.append(Particle(initial_position=Vec2(0.4, 0), initial_angle=np.pi/6))
+
+# Hardcoded constants
+## Physical Constants
+eta_2D = 1
+kappa = 1
+## Simulation time
+t_start = 0.0
+t_end = 200.0
+## Number of steps
+steps = 10_000
+################################################################################################################################
+
+# Helper symbolic expressions
+################################################################################################################################
+def r(x_a, y_a, x_b, y_b):
+	"""Returns the Cartesian distance between (x_a, y_a) and (x_b, y_b)."""
+	return sp.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
+
+leading_constant = -kappa / (4 * sp.pi * eta_2D)
+
+subexp_1 = (x_i - x_j) / r(x_i, y_i, x_j, y_j)
+subexp_2 = (y_i - y_j) / r(x_i, y_i, x_j, y_j)
+
+subexp_3 = ( subexp_1 * sp.cos(alpha_j) ) + ( subexp_2 * sp.sin(alpha_j) )
 
 subexp_4 = 1 - 2 * (subexp_3 ** 2)
 
-v_x = (leading_constant / r(x, y, x_0, y_0)) * subexp_4 * subexp_1
-v_y = (leading_constant / r(x, y, x_0, y_0)) * subexp_4 * subexp_2
+v_x = (leading_constant / r(x_i, y_i, x_j, y_j)) * subexp_4 * subexp_1
+v_y = (leading_constant / r(x_i, y_i, x_j, y_j)) * subexp_4 * subexp_2
 
-curl = sympy.diff(v_y, x) - sympy.diff(v_x, y)
+velocity_vector = Vec2(v_x, v_y)
 
-# Defining helpher functions to substitute numerical values into the SymPy formulas
-vars = (x, y, x_0, y_0, alpha, alpha_0)
-sub_v_x = sympy.lambdify(vars, v_x, modules="numpy")
-sub_v_y = sympy.lambdify(vars, v_y, modules="numpy")
-sub_alpha = sympy.lambdify(vars, 0.5 * curl, modules="numpy")
+# curl = 0.5 * (sp.diff(v_y, x_i) - sp.diff(v_x, y_i))
+curl = (-1/(4 * sp.pi * eta_2D)) * (sp.cos(alpha_j) * sp.sin(alpha_j)) * (1/(x_i - x_j) ** 2)
+# print("curl:")
+# print(curl)
 
-def substitute_position_values(x, y, alpha, x_0, y_0, alpha_0):
-    """Substitutes the position coordinates (x, y, alpha) of one particle and (x_0, y_0, alpha_0)
-       of another particle into the expressions for v_x, v_y, and alpha.
-       
-       This is used in the modelling function to calculate the total forces and torques on
-       the object."""
-    return (sub_v_x(x, y, alpha, x_0, y_0, alpha_0), sub_v_y(x, y, alpha, x_0, y_0, alpha_0), \
-            sub_alpha(x, y, alpha, x_0, y_0, alpha_0))
+# Saving a little memory because why not
+del leading_constant, subexp_1, subexp_2, subexp_3, subexp_4
+del v_x, v_y
+################################################################################################################################
 
-# def model(i):
-#     # Using library functions as much as possible to reduce overhead and improve performance
-#     # This function uses a "blessed index" approach to perform the calculations while excluding
-#     # a single index of the ndarray.
-#     return np.sum(substitute_position_values(position[i], position[:i])) + \
-#            np.sum(substitute_position_values(position[i], position[i + 1:]))
+# Create the functions to integrate
+for i in range(num_particles):
+	particle_list[i].calculate_plane_velocity(particle_list, velocity_vector)
+	particle_list[i].calculate_plane_angular_velocity(particle_list, curl)
 
+for i in range(num_particles):
+	particle_list[i].lambdify_position()
+	particle_list[i].lambdify_velocity(particle_list)
+	particle_list[i].lambdify_alpha(particle_list)
 
-# Initial positions of both particles
-# Particle 1
-x_1 = y_1 = alpha_1 = 0
-# Particle 2
-x_2 = 0.4
-y_2 = 0
-alpha_2 = sympy.N(sympy.pi / 6)
+del Particle.var
 
-position[0][0] = x_1
-position[0][1] = y_1
-position[0][2] = alpha_1
+import numpy as np
+from scipy.integrate import solve_ivp, odeint
+import matplotlib.pyplot as plt
 
-position[1][0] = x_2
-position[1][1] = y_2
-position[1][2] = alpha_2
+# Define the model function
+################################################################################################################################
+def vector_field(t, old_state):
+	"""
+	Integrate function.
 
-time = np.linspace(0, 200, N)
+	The function calculates f, a list with all differential equations of motion in the order
+	diff(x0), diff(y0), diff(x1), diff(y1), ...diff(xn-1), diff(yn-1), diff(vx0), diff(vy0)...diff(vxn-1), diff(vyn-1)
 
-data = solve_ivp(model, (0, 200), position, t_eval=time)
+	it can be optimized, but it's done to be readable
+	"""
+	state = np.empty(3 * num_particles, dtype=np.float64)
+
+	for i in range(num_particles):
+		state[2 * i] = particle_list[i].lambda_velocity.x(old_state)
+		state[2 * i + 1] = particle_list[i].lambda_velocity.y(old_state)
+		state[2 * num_particles + i] = particle_list[i].lambda_alpha(old_state)
+	return state
+################################################################################################################################
+
+# Set the initial conditions
+initial_conditions = np.empty(3 * num_particles, dtype=np.float64)
+"""For the first 2n elements, it stores (x_i, y_i), and then for the last n elements, it stores alpha_i."""
+for i in range(num_particles):
+	initial_conditions[2 * i] = particle_list[i].initial_position.x
+	initial_conditions[2 * i + 1] = particle_list[i].initial_position.y
+	initial_conditions[2 * num_particles + i] = particle_list[i].initial_angle
+
+# ODE solver parameters
+time = np.linspace(t_start, t_end, num=steps)
+
+print("Entering solve_ivp")
+sol = solve_ivp(vector_field, (t_start, t_end), initial_conditions, t_eval=time, rtol=1e-5)#, method="LSODA")
+# print(sol)
+# sol = odeint(vector_field, initial_conditions, time, tfirst=True)
+# sol = np.transpose(sol)
+print("Solved the ivp")
+
+fig = plt.figure(figsize=(16, 9))
+
+plt.subplot(1, 3, 1)
+plt.plot(sol.t, sol.y[0], color='r', label='particle 1')
+plt.plot(sol.t, sol.y[2], color='g', label='particle 2')
+# plt.plot(time, sol[0], color='r', label='particle 1')
+# plt.plot(time, sol[2], color='g', label='particle 2')
+
+plt.xlabel('Time')
+plt.ylabel('x coordinate')
+plt.legend(['particle 1','particle 2'])
+
+plt.subplot(1, 3, 2)
+plt.plot(sol.t, sol.y[1], color='r', label='particle 1')
+plt.plot(sol.t, sol.y[3], color='g', label='particle 2')
+# plt.plot(time, sol[1], color='r', label='particle 1')
+# plt.plot(time, sol[3], color='g', label='particle 2')
+
+plt.xlabel('Time')
+plt.ylabel('y coordinate')
+plt.legend(['particle 1','particle 2'])
+
+plt.subplot(1, 3, 3)
+plt.plot(sol.t, sol.y[4], color='r', label='particle 1')
+plt.plot(sol.t, sol.y[5], color='g', label='particle 2')
+# plt.plot(time, sol[4], color='r', label='particle 1')
+# plt.plot(time, sol[5], color='g', label='particle 2')
+
+plt.xlabel('Time')
+plt.ylabel('Alpha')
+plt.legend(['particle 1','particle 2'])
+# plt.show()
+fig.savefig("temp.png", dpi=fig.dpi)
