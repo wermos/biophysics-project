@@ -63,6 +63,7 @@ for i in range(num_particles):
 	particle_list[i].lambdify_velocity(particle_list)
 	particle_list[i].lambdify_alpha(particle_list)
 
+# Saving some more memory because we are done with variable and won't need it again
 del Particle.var
 
 import numpy as np
@@ -91,7 +92,7 @@ def vector_field(t, old_state):
 
 # Set the initial conditions
 initial_conditions = np.empty(3 * num_particles, dtype=np.float64)
-"""For the first 2n elements, it stores (x_i, y_i), and then for the last n elements, it stores alpha_i."""
+"""For the first 2n elements, it stores (x_i, y_i), and then for the last n elements, it stores alpha_i (1 <= i <= n)."""
 for i in range(num_particles):
 	initial_conditions[2 * i] = particle_list[i].initial_position.x
 	initial_conditions[2 * i + 1] = particle_list[i].initial_position.y
@@ -101,7 +102,7 @@ for i in range(num_particles):
 time = np.linspace(t_start, t_end, num=steps)
 
 print("Entering solve_ivp")
-sol = solve_ivp(vector_field, (t_start, t_end), initial_conditions, t_eval=time, rtol=1e-5)#, method="LSODA")
+sol = solve_ivp(vector_field, (t_start, t_end), initial_conditions, t_eval=time, rtol=1e-5)
 # print(sol)
 print("Solved the ivp")
 

@@ -33,6 +33,3 @@ class Vec2:
 	def get_length(self):
 		# Note that math.sqrt is faster than np.sqrt on scalars.
 		return sqrt(self.dot(self))
-
-	# def subs(self, dictionary):
-	# 	return Vec2(self.x.subs(dictionary), self.y.subs(dictionary))

@@ -2,7 +2,7 @@ from vec2 import *
 import numpy as np
 import sympy as sp
 
-# Has to be here because of the .subs() function
+# Has to be here because of the .subs() function which is used in the calculate_* functions
 x_i, y_i, x_j, y_j, alpha_i, alpha_j = sp.symbols("x_i y_i x_j y_j alpha_i alpha_j", real=True)
 """
 x_j     = x-coordinate of a dipole
@@ -16,6 +16,7 @@ alpha_i = angle (w.r.t. the positive x-axis) of the dipole w.r.t. we are doing o
 class Particle():
 	# n = number of particles
 	n = 0
+	# var = NumPy array which stores the list of symbolic variables used by the particle objects
 	var = None
 	def __init__(self, initial_position, initial_angle):
 		# i = particle index
@@ -26,7 +27,7 @@ class Particle():
 		self.initial_position = initial_position
 		self.initial_angle = initial_angle
 
-		# position, velocity, alpha = symbolic variables
+		# symbolic_velocity, symbolic_alpha = symbolic variables unique to the object
 		self.symbolic_position = Vec2(sp.symbols("x_" + str(self.i), real=True), sp.symbols("y_" + str(self.i), real=True))
 		self.symbolic_alpha = sp.symbols("alpha_" + str(self.i), real=True)
 
@@ -44,24 +45,34 @@ class Particle():
 	def calculate_plane_velocity(self, particles, expr):
 		for j in range(len(particles)):
 			if self.i != j:
-				self.total_velocity.x += expr.x.subs({x_j: particles[j].symbolic_position.x, y_j: particles[j].symbolic_position.y, alpha_j: particles[j].symbolic_alpha,
-													  x_i: self.symbolic_position.x, y_i: self.symbolic_position.y, alpha_i: self.symbolic_alpha})
-				self.total_velocity.y += expr.y.subs({x_j: particles[j].symbolic_position.x, y_j: particles[j].symbolic_position.y, alpha_j: particles[j].symbolic_alpha,
-													  x_i: self.symbolic_position.x, y_i: self.symbolic_position.y, alpha_i: self.symbolic_alpha})
+				other_position = particles[j].symbolic_position
+				my_position = self.symbolic_position
+				# Defined the next two just to keep up the naming scheme
+				other_alpha = particles[j].symbolic_alpha
+				my_alpha = self.symbolic_alpha
+
+				self.total_velocity.x += expr.x.subs({x_j: other_position.x, y_j: other_position.y, alpha_j: other_alpha,
+													  x_i: my_position.x, y_i: my_position.y, alpha_i: my_alpha})
+				self.total_velocity.y += expr.y.subs({x_j: other_position.x, y_j: other_position.y, alpha_j: other_alpha,
+													  x_i: my_position.x, y_i: my_position.y, alpha_i: my_alpha})
 
 	# Compute particle angle using the relevant equations
 	def calculate_plane_angular_velocity(self, particles, expr):
 		for j in range(len(particles)):
 			if self.i != j:
-				self.total_alpha += expr.subs({x_j: particles[j].symbolic_position.x, y_j: particles[j].symbolic_position.y, alpha_j: particles[j].symbolic_alpha,
-											   x_i: self.symbolic_position.x, y_i: self.symbolic_position.y, alpha_i: self.symbolic_alpha})
+				other_position = particles[j].symbolic_position
+				my_position = self.symbolic_position
+				# Defined the next two just to keep up the naming scheme
+				other_alpha = particles[j].symbolic_alpha
+				my_alpha = self.symbolic_alpha
 
-	# lambdified symbolic functions are faster for numerical calculations.
-	# I used this approach (compute first symbolic equations of motion and then compile the function with lambdify)
-	# to avoid python loops in the vectorfield function which needs to be run thousands of times and that is slow.
+				self.total_alpha += expr.subs({x_j: other_position.x, y_j: other_position.y, alpha_j: other_alpha,
+											   x_i: my_position.x, y_i: my_position.y, alpha_i: my_alpha})
+
 	@staticmethod
 	def get_variable_list(particles):
-		"""Assumes that the particle list used for all the particles is the same. (Reasonable assumption)"""
+		"""Computes the list of symbolic variables just once for all objects of this class to speed up the computation.
+		   Assumes that the particle list used for all the particles is the same. (Reasonable assumption)"""
 		if Particle.var is None:
 			n = len(particles)
 			Particle.var = np.empty(3 * n, dtype=np.dtype(sp.core.symbol.Symbol))
@@ -70,11 +81,16 @@ class Particle():
 				Particle.var[2 * j + 1] = particles[j].symbolic_position.y
 				Particle.var[2 * n + j] = particles[j].symbolic_alpha
 
+	# Lambdified symbolic functions are faster for numerical calculations.
+	# I used this approach (compute first symbolic equations of motion and then compile the function with lambdify)
+	# to avoid python loops in the vectorfield function which needs to be run thousands of times and that is slow.
 	def lambdify_position(self):
 		self.lambda_position.x = sp.lambdify(self.symbolic_position.x, self.symbolic_position.x)
 		self.lambda_position.y = sp.lambdify(self.symbolic_position.y, self.symbolic_position.y)
 
 	def lambdify_velocity(self, particles):
+		"""Lambdifies the expression for the particle velocity, using the list of symbolic variables
+		   obtained from `get_variable_list`."""
 		# var = []
 		# for j in range(n):
 			# var.append(particles[j].symbolic_position.x)
@@ -89,5 +105,7 @@ class Particle():
 		self.lambda_velocity.y = sp.lambdify([Particle.var], self.total_velocity.y)
 
 	def lambdify_alpha(self, particles):
+		"""Lambdifies the expression for alpha, using the list of symbolic variables
+		   obtained from `get_variable_list`."""
 		Particle.get_variable_list(particles)
 		self.lambda_alpha = sp.lambdify([Particle.var], self.total_alpha)
