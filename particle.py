@@ -28,10 +28,11 @@ class Particle():
 		self.initial_angle = initial_angle
 
 		# symbolic_velocity, symbolic_alpha = symbolic variables unique to the object
-		self.symbolic_position = Vec2(sp.symbols("x_" + str(self.i), real=True), sp.symbols("y_" + str(self.i), real=True))
+		self.symbolic_position = Vec2(sp.symbols("x_" + str(self.i), real=True),
+									  sp.symbols("y_" + str(self.i), real=True))
 		self.symbolic_alpha = sp.symbols("alpha_" + str(self.i), real=True)
 
-		# Stores the total force and torque on the object as symbolic expressions
+		# Stores the total velocity and angle acting on the object as symbolic expressions
 		self.total_velocity = Vec2(0, 0)
 		self.total_alpha = 0
 
@@ -85,8 +86,8 @@ class Particle():
 	# I used this approach (compute first symbolic equations of motion and then compile the function with lambdify)
 	# to avoid python loops in the vectorfield function which needs to be run thousands of times and that is slow.
 	def lambdify_position(self):
-		self.lambda_position.x = sp.lambdify(self.symbolic_position.x, self.symbolic_position.x)
-		self.lambda_position.y = sp.lambdify(self.symbolic_position.y, self.symbolic_position.y)
+		self.lambda_position.x = sp.lambdify(self.symbolic_position.x, self.symbolic_position.x, modules="numpy")
+		self.lambda_position.y = sp.lambdify(self.symbolic_position.y, self.symbolic_position.y, modules="numpy")
 
 	def lambdify_velocity(self, particles):
 		"""Lambdifies the expression for the particle velocity, using the list of symbolic variables
@@ -101,11 +102,11 @@ class Particle():
 		Particle.get_variable_list(particles)
 		# print(Particle.var)
 
-		self.lambda_velocity.x = sp.lambdify([Particle.var], self.total_velocity.x)
-		self.lambda_velocity.y = sp.lambdify([Particle.var], self.total_velocity.y)
+		self.lambda_velocity.x = sp.lambdify([Particle.var], self.total_velocity.x, modules="numpy")
+		self.lambda_velocity.y = sp.lambdify([Particle.var], self.total_velocity.y, modules="numpy")
 
 	def lambdify_alpha(self, particles):
 		"""Lambdifies the expression for alpha, using the list of symbolic variables
 		   obtained from `get_variable_list`."""
 		Particle.get_variable_list(particles)
-		self.lambda_alpha = sp.lambdify([Particle.var], self.total_alpha)
+		self.lambda_alpha = sp.lambdify([Particle.var], self.total_alpha, modules="numpy")

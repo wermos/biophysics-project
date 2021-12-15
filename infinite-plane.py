@@ -2,10 +2,11 @@ from vec2 import *
 from particle import *
 
 # Input here the initial conditions of the particles
-################################################################################################################################
+#######################################################################################################################
 num_particles = 2
 
 # Particle list
+# TODO: Use a NumPy array instead of a Python list, if possible
 particle_list = []
 
 # Create the particles
@@ -18,13 +19,13 @@ eta_2D = 1
 kappa = 1
 ## Simulation time
 t_start = 0.0
-t_end = 200.0
+t_end = 20.0
 ## Number of steps
-steps = 10_000
-################################################################################################################################
+steps = 1_000
+#######################################################################################################################
 
 # Helper symbolic expressions
-################################################################################################################################
+#######################################################################################################################
 def r(x_a, y_a, x_b, y_b):
 	"""Returns the Cartesian distance between (x_a, y_a) and (x_b, y_b)."""
 	return sp.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
@@ -43,15 +44,15 @@ v_y = (leading_constant / r(x_i, y_i, x_j, y_j)) * subexp_4 * subexp_2
 
 velocity_vector = Vec2(v_x, v_y)
 
-# curl = 0.5 * (sp.diff(v_y, x_i) - sp.diff(v_x, y_i))
-curl = (-1/(4 * sp.pi * eta_2D)) * (sp.cos(alpha_j) * sp.sin(alpha_j)) * (1/(x_i - x_j) ** 2)
+curl = 0.5 * (sp.diff(v_y, x_i) - sp.diff(v_x, y_i))
+# curl = (-1/(4 * sp.pi * eta_2D)) * (sp.cos(alpha_j) * sp.sin(alpha_j)) * (1/(x_i - x_j) ** 2)
 # print("curl:")
 # print(curl)
 
 # Saving a little memory because why not
 del leading_constant, subexp_1, subexp_2, subexp_3, subexp_4
 del v_x, v_y
-################################################################################################################################
+#######################################################################################################################
 
 # Create the functions to integrate
 for i in range(num_particles):
@@ -71,15 +72,14 @@ from scipy.integrate import solve_ivp, odeint
 import matplotlib.pyplot as plt
 
 # Define the model function
-################################################################################################################################
+#######################################################################################################################
 def vector_field(t, old_state):
 	"""
 	Integrate function.
 
-	The function calculates f, a list with all differential equations of motion in the order
-	diff(x0), diff(y0), diff(x1), diff(y1), ...diff(xn-1), diff(yn-1), diff(vx0), diff(vy0)...diff(vxn-1), diff(vyn-1)
-
-	it can be optimized, but it's done to be readable
+	The function calculates `state`, a NumPy array with all differential equations in the order
+	[diff(x_0), diff(y_0), diff(x_1), diff(y_1), ..., diff(x_{n - 1}), diff(y_{n - 1}), diff(alpha_0), diff(alpha_1), ...,
+	 diff(alpha_{n - 1})]
 	"""
 	state = np.empty(3 * num_particles, dtype=np.float64)
 
@@ -88,11 +88,13 @@ def vector_field(t, old_state):
 		state[2 * i + 1] = particle_list[i].lambda_velocity.y(old_state)
 		state[2 * num_particles + i] = particle_list[i].lambda_alpha(old_state)
 	return state
-################################################################################################################################
+#######################################################################################################################
 
 # Set the initial conditions
 initial_conditions = np.empty(3 * num_particles, dtype=np.float64)
-"""For the first 2n elements, it stores (x_i, y_i), and then for the last n elements, it stores alpha_i (1 <= i <= n)."""
+"""
+For the first 2n elements, it stores (x_i, y_i), and then for the last n elements, it stores alpha_i (1 <= i <= n).
+"""
 for i in range(num_particles):
 	initial_conditions[2 * i] = particle_list[i].initial_position.x
 	initial_conditions[2 * i + 1] = particle_list[i].initial_position.y
@@ -103,7 +105,6 @@ time = np.linspace(t_start, t_end, num=steps)
 
 print("Entering solve_ivp")
 sol = solve_ivp(vector_field, (t_start, t_end), initial_conditions, t_eval=time, rtol=1e-5)
-# print(sol)
 print("Solved the ivp")
 
 fig = plt.figure(figsize=(16, 9))
